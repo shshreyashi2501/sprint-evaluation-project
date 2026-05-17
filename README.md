@@ -8,6 +8,7 @@ Technologies Used
 •	Docker
 •	AWS EC2
 •	Python Flask
+• GitHub Secrets
 •	HashiCorp Vault
 •	Terraform
 
@@ -24,7 +25,9 @@ Tool: Safety
 Secret Scan
 Tool: Gitleaks
 IaC Validation
-Terraform security validation for infrastructure configurations.
+Tool: Checkov
+Container Scan
+Tool: Trivy
 
 Secrets Management
 HashiCorp Vault was used for centralized secret management.
@@ -76,7 +79,6 @@ Future Improvements
 •	Kubernetes deployment
 •	Jenkins integration
 •	Vault AppRole authentication
-•	Trivy container scanning
 •	Monitoring using Prometheus and Grafana
 
 Author
