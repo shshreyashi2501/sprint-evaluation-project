@@ -8,7 +8,7 @@ Technologies Used
 •	Docker
 •	AWS EC2
 •	Python Flask
-• GitHub Secrets
+•  GitHub Secrets
 •	HashiCorp Vault
 •	Terraform
 
