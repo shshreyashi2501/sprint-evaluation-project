@@ -1,0 +1,114 @@
+name: DevSecOps Full CI/CD Pipeline
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+
+# ================= SECURITY =================
+  security:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.10"
+
+    - name: Install Bandit
+      run: pip install bandit
+
+    - name: SAST Scan
+      run: bandit -r app/ || true
+
+    - name: Install Safety
+      run: pip install safety
+
+    - name: Dependency Scan
+      run: safety check || true
+
+    - name: Secret Scan
+      run: docker run --rm -v $PWD:/repo zricethezav/gitleaks detect --source=/repo || true
+      
+    - name: Install Checkov
+      run: pip install checkov
+
+    - name: IaC Security Scan
+      run: checkov -d . || true
+
+    - name: Build Image for Scan
+      run: docker build -t devsecops-app .
+
+    - name: Install Trivy
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+        wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+        echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list
+        sudo apt-get update
+        sudo apt-get install -y trivy
+
+    - name: Container Vulnerability Scan
+      run: trivy image devsecops-app || true
+
+
+# ================= BUILD =================
+  build:
+    runs-on: ubuntu-latest
+    needs: security
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Build Docker Image
+      run: docker build -t devsecops-app .
+
+    - name: Save Image
+      run: docker save devsecops-app > image.tar
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: image
+        path: image.tar
+
+
+# ================= DEPLOY =================
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+    - uses: actions/download-artifact@v4
+      with:
+        name: image
+
+    - name: Copy Image to EC2 & Deploy
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.EC2_KEY }}
+        script: |
+
+          # Load project
+          cd ~/devsecops-project || git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git
+          cd devsecops-project
+
+          # Build image on EC2
+          docker build -t devsecops-app .
+
+          # Clean old containers
+          docker stop dev staging prod || true
+          docker rm dev staging prod || true
+
+          # Deploy DEV
+          docker run -d -p 5000:5000 --name dev devsecops-app
+
+          # Deploy STAGING
+          docker run -d -p 5001:5000 --name staging devsecops-app
+
+          # Deploy PROD
+          docker run -d -p 5002:5000 --name prod devsecops-app
